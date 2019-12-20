@@ -1,0 +1,9 @@
+[package]
+name = "tps65185"
+version = "0.1.0"
+authors = ["Boris-Chengbiao Zhou <bobo1239@web.de>"]
+edition = "2018"
+
+[dependencies]
+embedded-hal = "0.2.3"
+enum-repr = "0.2.5"

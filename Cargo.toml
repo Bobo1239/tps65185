@@ -5,5 +5,5 @@ authors = ["Boris-Chengbiao Zhou <bobo1239@web.de>"]
 edition = "2018"
 
 [dependencies]
-embedded-hal = "0.2.3"
+embedded-hal = { version = "0.2.3", features = ["unproven"] }
 enum-repr = "0.2.5"

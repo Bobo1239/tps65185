@@ -1,9 +1,10 @@
 #![no_std]
+#![feature(const_generics)]
+#![allow(incomplete_features)]
 
 mod register;
 
 use core::fmt::Debug;
-use core::marker::PhantomData;
 
 use embedded_hal::blocking::delay::DelayUs;
 use embedded_hal::blocking::i2c::{Write, WriteRead};
@@ -16,7 +17,7 @@ pub const I2C_SLAVE_ADDRESS: u8 = 0x68;
 /// TODO: doc; Dataasheet specifies 1.8ms delay until I2C is ready
 pub const WAKEUP_I2C_DELAY_US: u16 = 1_800;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Error<I2cErr, PinErr> {
     I2c(I2cErr),
     Pin(PinErr),
@@ -35,23 +36,23 @@ impl<I2cErr, PinErr> From<PinErr> for Error<I2cErr, PinErr> {
     }
 }
 
-#[derive(Debug, PartialEq, Eq)]
-pub struct Tps65185<M: Mode, I2c, Wakeup, Pwrup, VcomCtrl> {
+#[derive(Debug)]
+pub struct Tps65185<I2c, Wakeup, Pwrup, VcomCtrl, const M: Mode> {
     i2c: I2c,
     pin_wakeup: Wakeup,
     pin_pwrup: Pwrup,
     pin_vcom_ctrl: VcomCtrl,
-    mode: PhantomData<M>,
 }
 
-pub trait Mode {}
-pub enum Sleep {}
-impl Mode for Sleep {}
-// Merged into one mode as we only care about I2c availability
-pub enum StandbyActive {}
-impl Mode for StandbyActive {}
+#[derive(PartialEq, Eq)]
+pub enum Mode {
+    Sleep,
+    /// Merged into one mode as we only care about I2C availability
+    StandbyActive,
+}
 
-impl<I2c, Wakeup, Pwrup, VcomCtrl, I2cErr, PinErr> Tps65185<Sleep, I2c, Wakeup, Pwrup, VcomCtrl>
+impl<I2c, Wakeup, Pwrup, VcomCtrl, I2cErr, PinErr>
+    Tps65185<I2c, Wakeup, Pwrup, VcomCtrl, { Mode::Sleep }>
 where
     I2c: WriteRead<Error = I2cErr> + Write<Error = I2cErr>,
     Wakeup: OutputPin<Error = PinErr>,
@@ -72,7 +73,6 @@ where
             pin_wakeup,
             pin_pwrup,
             pin_vcom_ctrl,
-            mode: PhantomData,
         })
     }
 
@@ -81,7 +81,10 @@ where
     pub fn wakeup<D: DelayUs<u16>>(
         mut self,
         delay: Option<&mut D>,
-    ) -> Result<Tps65185<StandbyActive, I2c, Wakeup, Pwrup, VcomCtrl>, Error<I2cErr, PinErr>> {
+    ) -> Result<
+        Tps65185<I2c, Wakeup, Pwrup, VcomCtrl, { Mode::StandbyActive }>,
+        Error<I2cErr, PinErr>,
+    > {
         self.pin_wakeup.set_high()?;
         if let Some(delay) = delay {
             delay.delay_us(WAKEUP_I2C_DELAY_US);
@@ -91,7 +94,6 @@ where
             pin_wakeup: self.pin_wakeup,
             pin_pwrup: self.pin_pwrup,
             pin_vcom_ctrl: self.pin_vcom_ctrl,
-            mode: PhantomData,
         })
     }
 
@@ -99,7 +101,7 @@ where
 }
 
 impl<I2c, Wakeup, Pwrup, VcomCtrl, I2cErr, PinErr>
-    Tps65185<StandbyActive, I2c, Wakeup, Pwrup, VcomCtrl>
+    Tps65185<I2c, Wakeup, Pwrup, VcomCtrl, { Mode::StandbyActive }>
 where
     I2c: WriteRead<Error = I2cErr> + Write<Error = I2cErr>,
     Wakeup: OutputPin<Error = PinErr>,
@@ -127,14 +129,14 @@ where
     #[allow(clippy::type_complexity)]
     pub fn sleep(
         mut self,
-    ) -> Result<Tps65185<Sleep, I2c, Wakeup, Pwrup, VcomCtrl>, Error<I2cErr, PinErr>> {
+    ) -> Result<Tps65185<I2c, Wakeup, Pwrup, VcomCtrl, { Mode::Sleep }>, Error<I2cErr, PinErr>>
+    {
         self.pin_wakeup.set_low()?;
         Ok(Tps65185 {
             i2c: self.i2c,
             pin_wakeup: self.pin_wakeup,
             pin_pwrup: self.pin_pwrup,
             pin_vcom_ctrl: self.pin_vcom_ctrl,
-            mode: PhantomData,
         })
     }
 
